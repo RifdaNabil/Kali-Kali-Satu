@@ -1,224 +1,135 @@
 <?php
-//mengambil nilai index dari URL
-$id = $_GET['index'] ?? 0;
+session_start();
 
-//data array daftar perawatan
-$listPerawatan = [
-    ["Perawatan 1" ,"Isi Deskripsi 1", 150000, "img/perawatan1.jpg"],
-    ["Perawatan 2" ,"Isi Deskripsi 2", 100000, "img/perawatan2.jpg"],
-    ["Perawatan 3" ,"Isi Deskripsi 3", 50000,  "img/perawatan3.jpg"],
-    ["Perawatan 4" ,"Isi Deskripsi 4", 120000, "img/perawatan4.jpg"],
-];
+// DATA DARI INDEX
+$film   = $_GET['film'] ?? '';
+$gambar = $_GET['gambar'] ?? '';
 
-//inisialisasi variabel
-$pilihPerawatan = $_POST['pilihPerawatan'] ?? $id;
+// HARGA
+$hargaReguler = 75000;
+$hargaVIP     = 150000;
+$biayaAdmin   = 2500;
 
-// pengaman index array
-if (!isset($listPerawatan[$pilihPerawatan])) {
-    $pilihPerawatan = 0;
-}
+// INPUT FORM
+$jam     = $_POST['jam'] ?? '';
+$ruangan = $_POST['ruangan'] ?? '';
+$jumlah  = $_POST['jumlah'] ?? '';
+$diskon  = $_POST['kode'] ?? '';
 
-$hargaPerawatan = $listPerawatan[$pilihPerawatan][2];
-$jumlahOrang    = $_POST['jumlah'] ?? "";
-$ruangVIP       = isset($_POST['tambahan']);
-$pembayaran     = $_POST['pembayaran'] ?? "";
-$hitungTotal    = 0;
-$kembalian      = 0;
-$errors         = [];
+// TOTAL
+$hargaTiket = 0;
+$hargaDiskon=0;
+$totalAdmin = 0;
+$total      = 0;
 
-//proses hitung total harga jika tombol dihitung ditekan
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+// PROSES
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    if (isset($_POST['hitungTotal'])) {
-        if ($jumlahOrang === "" || !is_numeric($jumlahOrang) || $jumlahOrang <= 0) {
-            $errors[] = "Jumlah orang harus diisi dan berupa angka.";
+    if ($ruangan === 'Reguler') {
+        $hargaTiket = $hargaReguler;
+    } elseif ($ruangan === 'VIP') {
+        $hargaTiket = $hargaVIP;
+    }
+
+    if ($diskon == 'COUPLETIX' && $jumlah == 2) {
+        $hargaDiskon = ($hargaTiket*$jumlah) * 0.25;
+    }elseif ($diskon == 'SINGLETIX' && $jumlah == 1) {
+        $hargaDiskon = ($hargaTiket*$jumlah) * 0.30;
+    }
+
+    $totalAdmin = $biayaAdmin * $jumlah;
+    $total = ($hargaTiket * $jumlah)  - $hargaDiskon + $totalAdmin;
+
+    if (isset($_POST['simpan'])) {
+    // CEK STOK
+        if ($_SESSION['stok'][$film] >= $jumlah) {
+        $_SESSION['stok'][$film] -= $jumlah;
         } else {
-            $hitungTotal = $hargaPerawatan * $jumlahOrang;
-
-            // tambahan ruang VIP
-            if ($ruangVIP) {
-                $hitungTotal += 5000;
-            }
+            echo "<script>
+                alert('Stok tiket tidak mencukupi');
+                window.location.href='index.php';
+                </script>";
+            exit;
         }
-    }
-
-    //proses hitung kembalian jika tombol kembalian ditekan
-    if (isset($_POST['hitungKembalian'])) {
-
-        // pastikan total dihitung ulang
-        if ($jumlahOrang === "" || !is_numeric($jumlahOrang) || $jumlahOrang <= 0) {
-            $errors[] = "Jumlah orang harus diisi dan berupa angka.";
-        } else {
-            $hitungTotal = $hargaPerawatan * $jumlahOrang;
-            if ($ruangVIP) {
-                $hitungTotal += 50000;
-            }
-        }
-
-        if ($pembayaran === "" || !is_numeric($pembayaran)) {
-            $errors[] = "Pembayaran harus diisi dan berupa angka.";
-        } elseif ($pembayaran < $hitungTotal) {
-            $errors[] = "Pembayaran tidak boleh kurang dari total harga.";
-            $kembalian = 0;
-        } else {
-            $kembalian = $pembayaran - $hitungTotal;
-        }
-    }
-}
-
-if (isset($_POST['simpan'])) {
-    //proses simpan data pemesanan (bisa disimpan ke database atau file)
-    //contoh: menampilkan pesan sukses
-
-    // validasi semua data wajib diisi
-    if (
-        empty($_POST['nomor']) ||
-        empty($_POST['tanggal']) ||
-        empty($_POST['nama']) ||
-        $jumlahOrang === "" ||
-        !is_numeric($jumlahOrang) ||
-        $pembayaran === "" ||
-        !is_numeric($pembayaran)
-    ) {
-        $errors[] = "Semua data harus diisi dengan benar.";
-    }
-
-    // hitung ulang total (WAJIB, agar tidak tergantung tombol lain)
-    if (!$errors) {
-        $hitungTotal = $hargaPerawatan * $jumlahOrang;
-        if ($ruangVIP) {
-            $hitungTotal += 50000;
-        }
-
-        if ($pembayaran < $hitungTotal) {
-            $errors[] = "Pembayaran tidak mencukupi.";
-        }
-    }
-
-    if (!$errors) {
-        $kembalian = $pembayaran - $hitungTotal;
-
-        echo "<script>
-            alert(
-                'PEMESANAN BERHASIL\\n' +
-                'No Transaksi : {$_POST['nomor']}\\n' +
-                'Tanggal      : {$_POST['tanggal']}\\n' +
-                'Nama         : {$_POST['nama']}\\n' +
-                'Perawatan    : {$listPerawatan[$pilihPerawatan][0]}\\n' +
-                'Jumlah Orang : $jumlahOrang\\n' +
-                'VIP          : ".($ruangVIP ? "Ya (+Rp 5.000)" : "Tidak")."\\n' +
-                'Total Harga  : Rp $hitungTotal\\n' +
-                'Pembayaran   : Rp $pembayaran\\n' +
-                'Kembalian    : Rp $kembalian'
-            );
-            window.location.href='index.php';
+        echo "
+        <script>
+        alert(
+            'Pesanan Berhasil !\\n\\n' +
+            'Film        : $film\\n' +
+            'Jam Tayang  : $jam\\n' +
+            'Ruangan     : $ruangan\\n' +
+            'Jumlah Tiket: $jumlah\\n' +
+            'Biaya Admin : Rp " . number_format($totalAdmin) . "\\n' +
+            'Total Diskon: Rp" . number_format($hargaDiskon) . "\\n' +
+            'Total Bayar : Rp " . number_format($total) . "'
+        );
+        window.location.href='index.php';
         </script>";
         exit;
     }
 }
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pemesanan Klinik Estetika</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+<meta charset="UTF-8">
+<title>Pemesanan Tiket - Kali Kali Satu</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
+<div class="container mt-4">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-secondary shadow-sm">
-<div class="container-fluid">
-    <a class="navbar-brand" href="index.php">Klinik Estetika</a>
-</div>
-</nav>
+<h3>Pemesanan Tiket - Kali Kali Satu</h3>
+<hr>
 
-<div class="container mt-5">
-<div class="card">
-<div class="card-header text-center bg-success text-white">
-    <h5>Form Pemesanan</h5>
+<!-- INFO FILM -->
+ <div class="mb-3 text-center">
+<img src="img/<?= $gambar ?>" width="200" alt="<?= $film ?>">
+<p><strong><?= $film ?></strong></p>
 </div>
 
-<div class="card-body">
+<form method="post">
 
-<?php if ($errors) { ?>
-<div class="alert alert-danger">
-<ul>
-<?php foreach ($errors as $err) echo "<li>$err</li>"; ?>
-</ul>
-</div>
-<?php } ?>
-
-<form method="POST">
-
-<div class="mb-3">
-<label class="form-label">Nomor Transaksi</label>
-<input type="number" class="form-control" name="nomor" value="<?= $_POST['nomor'] ?? '' ?>">
-</div>
-
-<div class="mb-3">
-<label class="form-label">Tanggal Pemesanan</label>
-<input type="date" class="form-control" name="tanggal" value="<?= $_POST['tanggal'] ?? '' ?>">
-</div>
-
-<div class="mb-3">
-<label class="form-label">Nama Pemesan</label>
-<input type="text" class="form-control" name="nama" value="<?= $_POST['nama'] ?? '' ?>">
-</div>
-
-<label class="form-label">Pilihan Perawatan</label>
-<select class="form-select mb-3" name="pilihPerawatan" onchange="this.form.submit()">
-<?php foreach ($listPerawatan as $index => $tampil) { ?>
-<option value="<?= $index ?>" <?= ($index == $pilihPerawatan) ? 'selected' : '' ?>>
-<?= $tampil[0] ?>
-</option>
-<?php } ?>
-</select>
-
-<div class="mb-3">
-<label class="form-label">Harga Perawatan</label>
-<input type="text" class="form-control" value="<?= $hargaPerawatan ?>" readonly>
-</div>
-
-<div class="mb-3">
-<label class="form-label">Jumlah Orang</label>
-<input type="number" class="form-control" name="jumlah" value="<?= $jumlahOrang ?>">
-</div>
-
-<div class="form-check mb-3">
-<input class="form-check-input" type="checkbox" name="tambahan" <?= $ruangVIP ? 'checked' : '' ?>>
-<label class="form-check-label">Tambahan Ruang VIP (+Rp 50.000)</label>
-</div>
-
-<div class="mb-3">
-<label class="form-label">Total Harga</label>
-<input type="text" class="form-control" value="<?= $hitungTotal ?>" readonly>
-</div>
-
-<button class="btn btn-primary mb-3" name="hitungTotal">Hitung Total</button>
-
-<div class="mb-3">
-<label class="form-label">Pembayaran</label>
-<input type="number" class="form-control" name="pembayaran" value="<?= $pembayaran ?>">
-</div>
-
-<div class="mb-3">
-<label class="form-label">Kembalian</label>
-<input type="text" class="form-control" value="<?= $kembalian ?>" readonly>
-</div>
-
-<button class="btn btn-primary" name="hitungKembalian">Hitung Kembalian</button>
-
+<!-- JAM -->
+<label>Jam Tayang</label><br>
+<input type="radio" name="jam" value="12.00" <?= $jam=='12.00'?'checked':'' ?>> 12.00
+<input type="radio" name="jam" value="16.00" <?= $jam=='16.00'?'checked':'' ?>> 16.00
+<input type="radio" name="jam" value="18.00" <?= $jam=='18.00'?'checked':'' ?>> 18.00
 <br><br>
 
-<button type="reset" class="btn btn-danger">Batal</button>
-<button type="submit" class="btn btn-success" name="simpan">Pesan Sekarang</button>
+<!-- RUANGAN -->
+<label>Ruangan</label><br>
+<input type="radio" name="ruangan" value="Reguler" <?= $ruangan=='Reguler'?'checked':'' ?>> Reguler (75.000)
+<input type="radio" name="ruangan" value="VIP" <?= $ruangan=='VIP'?'checked':'' ?>> VIP (150.000)
+<br><br>
+
+<!-- JUMLAH -->
+<label>Jumlah Tiket</label>
+<input type="number" name="jumlah" class="form-control mb-3" value="<?= $jumlah ?>">
+
+<!-- VOUCHER -->
+<label>Kode Voucher</label>
+<input type="text" name="kode" class="form-control mb-3" value="<?= $diskon ?>">
+
+<!-- HITUNG -->
+<button type="submit" name="hitung" class="btn btn-secondary mb-3">
+Hitung Total
+</button>
+
+<br>
+
+<!-- TOTAL -->
+<label>Total Bayar</label>
+<input type="text" class="form-control mb-3"
+value="<?= $total ? 'Rp '.number_format($total) : '' ?>" readonly>
+
+<!-- SIMPAN -->
+<button type="submit" name="simpan" class="btn btn-success">
+Simpan
+</button>
 
 </form>
 </div>
-</div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
